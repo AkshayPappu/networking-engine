@@ -156,10 +156,16 @@ async def run_pipeline(
         grounded = filter_grounded_people(people, docs)
         strict = apply_strict_filters(grounded, docs, plan.anchor_groups)
 
+        con.print(
+            f"[dim]Funnel: {len(people)} from ranker → "
+            f"{len(grounded)} after grounding → "
+            f"{len(strict)} after strict filters[/dim]"
+        )
+
         if not strict:
             con.print(
-                "[yellow]No people passed strict filters (grounding + hedge/anchor checks). "
-                "Try increasing MAX_URLS, refining the query, or checking evidence_anchors from the planner.[/yellow]"
+                "[yellow]No people passed all filters. "
+                "Try increasing MAX_URLS or refining the query.[/yellow]"
             )
             return 1
 

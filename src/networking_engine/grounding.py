@@ -19,11 +19,40 @@ def _normalize_url(url: str) -> str:
     return urlunparse((p.scheme, p.netloc.lower(), path, "", p.query, ""))
 
 
+_STOP_WORDS = frozenset(
+    "a an and are as at be by for from has have he her his i in is it its"
+    " me my no not of on or our s she so t that the their them then there"
+    " these they this to us was we were what when which who will with you".split()
+)
+
+
+def _tokenize(s: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z0-9]+", s.casefold()) if w not in _STOP_WORDS and len(w) >= 2]
+
+
 def _quote_in_text(quote: str, text: str) -> bool:
+    """Exact substring match after whitespace normalization."""
     q = _norm_ws(quote)
     if len(q) < 12:
         return q in _norm_ws(text) or q in text.casefold()
     return q in _norm_ws(text)
+
+
+def _token_overlap(quote: str, text: str, threshold: float = 0.65) -> bool:
+    """Fuzzy fallback: check if enough meaningful tokens from the quote appear in the text."""
+    q_tokens = _tokenize(quote)
+    if len(q_tokens) < 3:
+        return False
+    t_tokens = set(_tokenize(text))
+    matches = sum(1 for t in q_tokens if t in t_tokens)
+    return (matches / len(q_tokens)) >= threshold
+
+
+def _quote_matches(quote: str, text: str) -> bool:
+    """Try exact substring first; fall back to token overlap for short documents (snippets)."""
+    if _quote_in_text(quote, text):
+        return True
+    return _token_overlap(quote, text)
 
 
 def build_corpus(docs: list[FetchedDocument], *, max_chars_per_doc: int = 14000) -> str:
@@ -59,7 +88,7 @@ def filter_grounded_people(
             doc = by_url.get(_normalize_url(u)) or by_url.get(u)
             if doc is None:
                 continue
-            if not _quote_in_text(ev.quote, doc.text_excerpt):
+            if not _quote_matches(ev.quote, doc.text_excerpt):
                 continue
             new_evidence.append(EvidenceItem(url=doc.url, quote=ev.quote.strip()))
         if not new_evidence:
